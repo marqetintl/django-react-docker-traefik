@@ -5,6 +5,41 @@ volumes:
   pgadmin_data:
 
 services:
+  web:
+    build: .
+    command: sh -c 'while ! nc -z db 5432; do sleep 1; done; cd server; python3 manage.py runserver 0.0.0.0:8000'
+    volumes:
+      - ./server:/app/server
+    expose:
+      - 8000
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=postgresql://pguser:pgpwd@db:5432/pgdb
+    depends_on:
+      - db
+      - client
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.django.rule=Host(`django.localhost`)"
+
+  client:
+    stdin_open: true
+    build: .
+    volumes:
+      - ./client:/app/client
+      - ./client/node_modules:/app/client/node_modules/
+    command: sh -c 'cd client && yarn dev'
+    expose:
+      - 5173
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      # - PORT=5173
+    depends_on:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.react.rule=Host(`react.localhost`)"
+
   traefik:
     image: traefik:v2.10
     command:
@@ -18,23 +53,6 @@ services:
       - "8080:8080"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-
-  web:
-    build: ./server
-    command: bash -c 'while !</dev/tcp/db/5432; do sleep 1; done; python manage.py runserver 0.0.0.0:8000'
-    volumes:
-      - ./server:/app
-    expose:
-      - 8000
-    environment:
-      - DEBUG=True
-      - DATABASE_URL=postgresql://pguser:pgpwd@db:5432/pgdb
-    depends_on:
-      - db
-      - traefik
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.django.rule=Host(`django.localhost`)"
 
   db:
     image: postgres:15-alpine
@@ -64,7 +82,6 @@ services:
       - pgadmin_data:/pgadmin
     depends_on:
       - db
-      - traefik
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.pgadmin.entrypoints=web"
