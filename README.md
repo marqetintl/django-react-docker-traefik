@@ -1,1 +1,1 @@
-# django-docker-traefik
+# django-react-docker-traefik
