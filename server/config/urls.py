@@ -7,9 +7,18 @@ from django.views.generic import TemplateView
 DEBUG = getattr(settings, 'DEBUG', False)
 PREVIEW = getattr(settings, 'PREVIEW', False)
 
+
+def get_template_name():
+    if not DEBUG or DEBUG and PREVIEW:
+        return 'client/index.html'
+    return 'index.html'
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', TemplateView.as_view(template_name='index.html'), name='index')
+    path('', TemplateView.as_view(
+        template_name=get_template_name()), name='index'
+    )
 ]
 
 if DEBUG:

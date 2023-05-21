@@ -7,7 +7,6 @@ WORKDIR /app
 
 # install dependencies
 COPY ./client/package.json ./client/package.json
-# RUN yarn set version berry
 
 COPY ./client/yarn.lock ./client/yarn.lock
 COPY ./client/.yarnrc.yml ./client/.yarnrc.yml
@@ -19,7 +18,6 @@ COPY ./client/tsconfig.node.json ./client/tsconfig.node.json
 COPY ./client/tsconfig.json ./client/tsconfig.json
 
 COPY ./client/vite.config.ts ./client/vite.config.ts
-# COPY uno.config.ts ./
 
 # copy project
 COPY ./client/ ./client

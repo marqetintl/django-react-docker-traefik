@@ -4,6 +4,8 @@ volumes:
   postgres_data_prod:
   postgres_data_prod_backups:
   traefik_prod:
+  static_prod:
+  media_prod:
 
 services:
   traefik:
@@ -15,41 +17,32 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
       # - "--log.level=DEBUG"
-      # - "--entrypoints.websecure.address=:443"
-      # - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
-      # - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
-      # - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-      # - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      # - "--certificatesresolvers.letsencrypt.acme.email="your@email"
-      # - "--certificatesresolvers.letsencrypt.acme.storage="/certificates/acme.json""
-      # - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
     ports:
       - 80:80
-      # - 443:443
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      # - "./traefik_prod:/etc/traefik/acme:z"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dashboard.rule=Host(`traefik.miq.localhost`)"
       - "traefik.http.routers.dashboard.tls=false"
-      # - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
-      # - "traefik.http.routers.dashboard.service=api@internal"
-      # - "traefik.http.routers.dashboard.middlewares=auth"
-      # - "traefik.http.middlewares.auth.basicauth.users=username:userpa$$word"
     depends_on:
       - web
 
   web:
     restart: on-failure
     build: 
-      context: ./server
+      context: .
       dockerfile: Dockerfile.prod
-    command: bash -c 'while !</dev/tcp/db/5432; do sleep 1; done; gunicorn --bind 0.0.0.0:8000 config.wsgi'
+    # command: bash -c 'while !</dev/tcp/db/5432; do sleep 1; done; gunicorn --bind 0.0.0.0:8000 config.wsgi'
+    command: bash -c 'while !</dev/tcp/db/5432; do sleep 1; done; python3 manage.py collectstatic --no-input; gunicorn --access-logfile - --bind 0.0.0.0:80 config.wsgi'
     expose:
-      - 8000
+      - 80
+    volumes:
+      - static_prod:/home/app/web/static
+      - media_prod:/home/app/web/media
     environment:
-      - DEBUG=True
+      - DEBUG=False
+      - PREVIEW=False
       - DATABASE_URL=postgresql://pguser:pgpwd@db:5432/pgdb
       - DJANGO_ALLOWED_HOSTS=.miq.localhost,
     depends_on:
@@ -57,8 +50,6 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.django.rule=Host(`django.miq.localhost`)"
-      # - "traefik.http.routers.django.tls=true"
-      # - "traefik.http.routers.django.tls.certresolver=letsencrypt"
   
   db:
     restart: on-failure
@@ -73,3 +64,20 @@ services:
       - POSTGRES_PASSWORD=pgpwd
       - POSTGRES_DB=pgdb
 
+  nginx:
+    restart: on-failure
+    build: ./nginx
+    environment:
+      - NGINX_HOST=nginx.docker.localhost
+    volumes:
+      - static_prod:/home/app/web/static
+      - media_prod:/home/app/web/media
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - traefik
+    expose:
+      - 80
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nginx.entrypoints=web"
+      - "traefik.http.routers.nginx.rule=Host(`django.miq.localhost`) && PathPrefix(`/static`) || Host(`django.miq.localhost`) && PathPrefix(`/media`)"
