@@ -37,6 +37,7 @@ ENV PYTHONUNBUFFERED 1
 # install dependencies
 COPY ./server/requirements.txt .
 RUN pip3 install -r requirements.txt
+RUN pip3 install tzdata
 
 # copy project
 COPY ./server ./server
