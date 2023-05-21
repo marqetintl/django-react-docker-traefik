@@ -1,0 +1,75 @@
+version: '3.8'
+
+volumes:
+  postgres_data_prod:
+  postgres_data_prod_backups:
+  traefik_prod:
+
+services:
+  traefik:
+    restart: on-failure
+    image: traefik:v2.10
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      # - "--log.level=DEBUG"
+      # - "--entrypoints.websecure.address=:443"
+      # - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      # - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      # - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      # - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      # - "--certificatesresolvers.letsencrypt.acme.email="your@email"
+      # - "--certificatesresolvers.letsencrypt.acme.storage="/certificates/acme.json""
+      # - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+    ports:
+      - 80:80
+      # - 443:443
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      # - "./traefik_prod:/etc/traefik/acme:z"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.miq.localhost`)"
+      - "traefik.http.routers.dashboard.tls=false"
+      # - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      # - "traefik.http.routers.dashboard.service=api@internal"
+      # - "traefik.http.routers.dashboard.middlewares=auth"
+      # - "traefik.http.middlewares.auth.basicauth.users=username:userpa$$word"
+    depends_on:
+      - web
+
+  web:
+    restart: on-failure
+    build: 
+      context: ./server
+      dockerfile: Dockerfile.prod
+    command: bash -c 'while !</dev/tcp/db/5432; do sleep 1; done; gunicorn --bind 0.0.0.0:8000 config.wsgi'
+    expose:
+      - 8000
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=postgresql://pguser:pgpwd@db:5432/pgdb
+      - DJANGO_ALLOWED_HOSTS=.miq.localhost,
+    depends_on:
+      - db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.django.rule=Host(`django.miq.localhost`)"
+      # - "traefik.http.routers.django.tls=true"
+      # - "traefik.http.routers.django.tls.certresolver=letsencrypt"
+  
+  db:
+    restart: on-failure
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data/:Z
+      - postgres_data_prod_backups:/backups:z
+    expose:
+      - 5432
+    environment:
+      - POSTGRES_USER=pguser
+      - POSTGRES_PASSWORD=pgpwd
+      - POSTGRES_DB=pgdb
+
